@@ -77,7 +77,36 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "";
+    
+    // 调试：记录 API 响应结构
+    console.log("API Response structure:", JSON.stringify(data, null, 2));
+    
+    // 尝试多种可能的响应格式
+    let content = "";
+    if (data.choices?.[0]?.message?.content) {
+      content = data.choices[0].message.content;
+    } else if (data.content) {
+      content = data.content;
+    } else if (data.text) {
+      content = data.text;
+    } else if (data.message?.content) {
+      content = data.message.content;
+    } else {
+      // 如果都没有，记录完整响应用于调试
+      console.error("Unexpected API response format:", JSON.stringify(data, null, 2));
+      return NextResponse.json(
+        { error: "API返回格式异常，请检查日志" },
+        { status: 500 }
+      );
+    }
+
+    if (!content || content.trim().length === 0) {
+      console.error("Empty content from API:", JSON.stringify(data, null, 2));
+      return NextResponse.json(
+        { error: "API返回内容为空" },
+        { status: 500 }
+      );
+    }
 
     // 尝试从响应中提取JSON
     let jsonContent = content.trim();
@@ -93,13 +122,29 @@ export async function POST(request: NextRequest) {
     try {
       result = JSON.parse(jsonContent);
     } catch (e) {
+      console.error("JSON parse error:", e);
+      console.error("Content to parse:", jsonContent);
+      
       // 如果解析失败，尝试查找第一个 { 到最后一个 } 之间的内容
       const firstBrace = jsonContent.indexOf("{");
       const lastBrace = jsonContent.lastIndexOf("}");
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        result = JSON.parse(jsonContent.substring(firstBrace, lastBrace + 1));
+        try {
+          result = JSON.parse(jsonContent.substring(firstBrace, lastBrace + 1));
+        } catch (e2) {
+          console.error("Second parse attempt failed:", e2);
+          console.error("Extracted content:", jsonContent.substring(firstBrace, lastBrace + 1));
+          return NextResponse.json(
+            { error: `无法解析API响应。原始内容：${jsonContent.substring(0, 200)}...` },
+            { status: 500 }
+          );
+        }
       } else {
-        throw new Error("无法解析API响应");
+        console.error("No JSON found in content:", jsonContent);
+        return NextResponse.json(
+          { error: `无法找到有效的JSON。API返回：${jsonContent.substring(0, 200)}...` },
+          { status: 500 }
+        );
       }
     }
 
