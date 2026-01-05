@@ -24,50 +24,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = `你是一个英语词根分析专家。请分析单词 "${word.trim()}"。
+    const prompt = `分析单词"${word.trim()}"的词根结构。返回JSON：
 
-要求：
-1. 首先判断这个单词是否是词根（root word）
-2. 如果是词根，返回JSON格式：
-{
-  "isRoot": true,
-  "rootWord": "${word.trim()}",
-  "rootInfo": {
-    "partOfSpeech": "词性（如：noun, verb, adjective等）",
-    "phonetic": "音标",
-    "meaning": "中文意思",
-    "commonPhrases": []
-  },
-  "derivedWords": []
-}
+如果是词根：
+{"isRoot":true,"rootWord":"${word.trim()}","rootInfo":{"partOfSpeech":"词性","phonetic":"音标","meaning":"中文意思","commonPhrases":[]},"derivedWords":[]}
 
-3. 如果不是词根，返回JSON格式：
-{
-  "isRoot": false,
-  "rootWord": "词根单词",
-  "rootInfo": {
-    "partOfSpeech": "词性",
-    "phonetic": "音标",
-    "meaning": "中文意思",
-    "commonPhrases": []
-  },
-  "derivedWords": [
-    {
-      "word": "扩展词1",
-      "prefixes": ["前缀1"],
-      "suffixes": ["后缀1"],
-      "partOfSpeech": "词性",
-      "phonetic": "音标",
-      "meaning": "中文意思"
-    }
-  ]
-}
+如果不是词根：
+{"isRoot":false,"rootWord":"词根","rootInfo":{"partOfSpeech":"词性","phonetic":"音标","meaning":"中文意思","commonPhrases":[]},"derivedWords":[{"word":"扩展词","prefixes":["前缀"],"suffixes":["后缀"],"partOfSpeech":"词性","phonetic":"音标","meaning":"中文意思"}]}
 
-重要提示：
-- derivedWords应该包含基于该词根的所有常见扩展词（加前缀、后缀、或复合前缀后缀）
-- 必须严格返回纯JSON格式，不要包含任何markdown代码块标记，不要有任何其他文字说明
-- 确保所有字段都有值，数组可以为空但不能缺失
-- JSON必须是有效的，可以被直接解析`;
+要求：只返回JSON，无其他文字。derivedWords包含常见扩展词。`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
     const response = await fetch(GEMINI_API_URL, {
       method: "POST",
@@ -83,9 +51,13 @@ export async function POST(request: NextRequest) {
             content: prompt,
           },
         ],
-        temperature: 0.3,
+        temperature: 0.2, // 降低 temperature 可以加快响应
+        max_tokens: 2000, // 限制输出长度
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -134,6 +106,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("Error analyzing word:", error);
+    
+    // 处理超时错误
+    if (error instanceof Error && error.name === 'AbortError') {
+      return NextResponse.json(
+        { error: "请求超时，请稍后重试" },
+        { status: 504 }
+      );
+    }
+    
     const errorMessage = error instanceof Error ? error.message : "分析失败，请稍后重试";
     return NextResponse.json(
       { error: errorMessage },
