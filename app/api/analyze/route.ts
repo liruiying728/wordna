@@ -111,10 +111,20 @@ export async function POST(request: NextRequest) {
     // 尝试从响应中提取JSON
     let jsonContent = content.trim();
     
-    // 如果响应包含代码块，提取其中的JSON
-    const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-    if (jsonMatch) {
-      jsonContent = jsonMatch[1];
+    // 如果响应包含代码块，提取其中的JSON（支持多种格式）
+    // 匹配 ```json ... ``` 或 ``` ... ```，使用非贪婪匹配
+    const jsonMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      jsonContent = jsonMatch[1].trim();
+    }
+    
+    // 如果还是没有找到，尝试查找第一个 { 到最后一个 } 之间的内容
+    if (!jsonContent.startsWith("{")) {
+      const firstBrace = jsonContent.indexOf("{");
+      const lastBrace = jsonContent.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
+      }
     }
 
     // 尝试解析JSON
@@ -124,25 +134,37 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error("JSON parse error:", e);
       console.error("Content to parse:", jsonContent);
+      console.error("Original content:", content.substring(0, 500));
       
-      // 如果解析失败，尝试查找第一个 { 到最后一个 } 之间的内容
-      const firstBrace = jsonContent.indexOf("{");
-      const lastBrace = jsonContent.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        try {
-          result = JSON.parse(jsonContent.substring(firstBrace, lastBrace + 1));
-        } catch (e2) {
-          console.error("Second parse attempt failed:", e2);
-          console.error("Extracted content:", jsonContent.substring(firstBrace, lastBrace + 1));
-          return NextResponse.json(
-            { error: `无法解析API响应。原始内容：${jsonContent.substring(0, 200)}...` },
-            { status: 500 }
-          );
+      // 如果解析失败，尝试修复常见的 JSON 问题
+      try {
+        // 移除可能的尾随逗号
+        let cleaned = jsonContent.replace(/,(\s*[}\]])/g, '$1');
+        // 尝试找到完整的 JSON（如果被截断，尝试补全）
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+          // 如果 JSON 看起来不完整，尝试补全
+          if (!cleaned.endsWith("}")) {
+            // 计算需要关闭的括号
+            const openBraces = (cleaned.match(/\{/g) || []).length;
+            const closeBraces = (cleaned.match(/\}/g) || []).length;
+            const openBrackets = (cleaned.match(/\[/g) || []).length;
+            const closeBrackets = (cleaned.match(/\]/g) || []).length;
+            
+            // 补全缺失的括号
+            cleaned += "]".repeat(openBrackets - closeBrackets);
+            cleaned += "}".repeat(openBraces - closeBraces);
+          }
+          result = JSON.parse(cleaned);
+        } else {
+          throw new Error("无法找到有效的JSON结构");
         }
-      } else {
-        console.error("No JSON found in content:", jsonContent);
+      } catch (e2) {
+        console.error("Second parse attempt failed:", e2);
         return NextResponse.json(
-          { error: `无法找到有效的JSON。API返回：${jsonContent.substring(0, 200)}...` },
+          { error: `无法解析API响应。请查看 Vercel 日志获取详细信息。` },
           { status: 500 }
         );
       }
