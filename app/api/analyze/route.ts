@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const GEMINI_API_URL = "https://api.ohmygpt.com/v1/chat/completions";
-const API_KEY = process.env.GEMINI_API_KEY;
-
-if (!API_KEY) {
-  console.error("GEMINI_API_KEY environment variable is not set");
-}
 
 export async function POST(request: NextRequest) {
   try {
+    // 在运行时读取环境变量
+    const API_KEY = process.env.GEMINI_API_KEY;
+
     if (!API_KEY) {
+      console.error("GEMINI_API_KEY environment variable is not set");
       return NextResponse.json(
-        { error: "API配置错误，请检查环境变量" },
+        { error: "API配置错误，请检查环境变量 GEMINI_API_KEY" },
         { status: 500 }
       );
     }
