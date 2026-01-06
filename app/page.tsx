@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   saveToHistory,
   getHistoryWords,
@@ -41,39 +42,124 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [historyWords, setHistoryWords] = useState<string[]>([]);
   const [searchWord, setSearchWord] = useState<string>("");
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // 加载历史记录
+  // 自动搜索函数
+  const handleAutoSearch = useCallback(async (searchWordValue: string) => {
+    if (!isClient) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ word: searchWordValue }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "分析失败");
+      }
+
+      // 只在客户端保存历史记录
+      if (typeof window !== "undefined") {
+        saveToHistory(searchWordValue, data);
+        setHistoryWords(getHistoryWords());
+      }
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "分析失败，请稍后重试");
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [isClient]);
+
+  // 标记为客户端组件（延迟执行，避免 SSR 问题）
   useEffect(() => {
-    setHistoryWords(getHistoryWords());
+    if (typeof window !== "undefined") {
+      setIsClient(true);
+      setMounted(true);
+    }
   }, []);
 
-  // 当加载时禁止页面滚动
+  // 加载历史记录和 URL 参数（只在客户端执行）
   useEffect(() => {
+    // 确保只在客户端执行
+    if (!isClient || typeof window === "undefined") return;
+    
+    setHistoryWords(getHistoryWords());
+    
+    // 检查 URL 参数
+    try {
+      const params = new URLSearchParams(window.location.search);
+      
+      if (params.get("showHistory") === "true") {
+        setShowHistory(true);
+      }
+      
+      // 如果有 word 参数，自动搜索
+      const wordParam = params.get("word");
+      if (wordParam) {
+        setWord(wordParam);
+        const searchWordValue = wordParam.toLowerCase();
+        setSearchWord(searchWordValue);
+        const cachedResult = getCachedResult(searchWordValue);
+        if (cachedResult) {
+          setResult(cachedResult);
+          setError(null);
+        } else {
+          // 如果没有缓存，自动提交搜索
+          handleAutoSearch(searchWordValue);
+        }
+      }
+    } catch (error) {
+      console.error("Error reading URL parameters:", error);
+    }
+  }, [isClient, handleAutoSearch]);
+
+  // 当加载时禁止页面滚动
+  // 控制 body 滚动（只在客户端执行）
+  useEffect(() => {
+    if (!isClient || typeof window === "undefined" || typeof document === "undefined") return;
+    
     if (loading) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
+    
     // 清理函数
     return () => {
-      document.body.style.overflow = 'unset';
+      if (typeof document !== "undefined") {
+        document.body.style.overflow = 'unset';
+      }
     };
-  }, [loading]);
+  }, [isClient, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!word.trim() || loading) return; // 防止重复提交
+    if (!word.trim() || loading || !isClient) return; // 防止重复提交，确保在客户端
 
     const searchWordValue = word.trim().toLowerCase();
     setSearchWord(searchWordValue);
 
-    // 检查缓存
-    const cachedResult = getCachedResult(searchWordValue);
-    if (cachedResult) {
-      setResult(cachedResult);
-      setError(null);
-      setLoading(false);
-      return;
+    // 检查缓存（只在客户端）
+    if (typeof window !== "undefined") {
+      const cachedResult = getCachedResult(searchWordValue);
+      if (cachedResult) {
+        setResult(cachedResult);
+        setError(null);
+        setLoading(false);
+        return;
+      }
     }
 
     setLoading(true);
@@ -94,9 +180,11 @@ export default function Home() {
         throw new Error(data.error || "分析失败");
       }
 
-      // 保存到历史记录
-      saveToHistory(searchWordValue, data);
-      setHistoryWords(getHistoryWords());
+      // 保存到历史记录（只在客户端）
+      if (typeof window !== "undefined") {
+        saveToHistory(searchWordValue, data);
+        setHistoryWords(getHistoryWords());
+      }
       setResult(data);
     } catch (err) {
       // 处理网络错误
@@ -112,18 +200,21 @@ export default function Home() {
   };
 
   const handleHistoryClick = (historyWord: string) => {
+    if (!isClient) return;
     setWord(historyWord);
     setSearchWord(historyWord.toLowerCase());
-    const cachedResult = getCachedResult(historyWord);
-    if (cachedResult) {
-      setResult(cachedResult);
-      setError(null);
+    if (typeof window !== "undefined") {
+      const cachedResult = getCachedResult(historyWord);
+      if (cachedResult) {
+        setResult(cachedResult);
+        setError(null);
+      }
     }
     setShowHistory(false);
   };
 
   const handleClearHistory = () => {
-    if (confirm("确定要清空所有历史记录吗？")) {
+    if (typeof window !== "undefined" && confirm("确定要清空所有历史记录吗？")) {
       clearHistory();
       setHistoryWords([]);
     }
@@ -136,61 +227,162 @@ export default function Home() {
         .slice(0, 20)
     : [];
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Input Box - 根据是否有结果显示不同位置 */}
-      <div
-        className={
-          result
-            ? "fixed top-0 left-0 right-0 bg-white shadow-md z-50 border-b border-gray-200"
-            : "flex items-center justify-center min-h-screen"
-        }
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 w-full">
-          {/* 默认页面显示标题 */}
-          {!result && (
-            <div className="text-center mb-8">
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">
-                WorDNA 词根分析工具
-              </h1>
-              <p className="text-gray-600 text-base sm:text-lg">
-                分析其词根及扩展词汇，加深理解，加速记忆
-              </p>
-            </div>
-          )}
-          
-          <form onSubmit={handleSubmit} className={`flex gap-2 sm:gap-3 ${result ? 'items-center' : ''}`}>
-            {/* 有结果时显示 WorDNA logo */}
-            {result && (
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mr-2 sm:mr-4 whitespace-nowrap flex-shrink-0">
-                WorDNA
-              </h1>
-            )}
-            <input
-              type="text"
-              value={word}
-              onChange={(e) => setWord(e.target.value)}
-              placeholder="输入一个单词..."
-              className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base lg:text-lg"
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading || !word.trim()}
-              className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors text-xs sm:text-sm lg:text-base whitespace-nowrap flex-shrink-0"
-            >
-              {loading ? "分析中..." : "分析"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowHistory(true)}
-              className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors text-xs sm:text-sm lg:text-base whitespace-nowrap flex-shrink-0"
-            >
-              历史记录
-            </button>
-          </form>
+  // 在服务端渲染时返回空内容，避免序列化问题
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p className="mt-4 text-gray-600">加载中...</p>
+          </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50" suppressHydrationWarning>
+      {/* Fixed Navbar */}
+      <nav className="fixed top-0 left-0 right-0 bg-white shadow-md z-50 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Left: WorDNA Logo */}
+            <Link 
+              href="/" 
+              className="text-xl sm:text-2xl font-bold text-gray-900 flex-shrink-0"
+              onClick={() => {
+                // 清除搜索结果，返回首页
+                setResult(null);
+                setWord("");
+                setSearchWord("");
+                setError(null);
+              }}
+            >
+              WorDNA
+            </Link>
+
+            {/* Center: Search Box (only when there's a result) */}
+            {result && (
+              <form onSubmit={handleSubmit} className="flex-1 max-w-2xl mx-2 sm:mx-4 flex gap-2">
+                <input
+                  type="text"
+                  value={word}
+                  onChange={(e) => setWord(e.target.value)}
+                  placeholder="输入一个单词..."
+                  className="flex-1 min-w-0 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !word.trim()}
+                  className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors text-sm whitespace-nowrap"
+                >
+                  {loading ? "分析中..." : "分析"}
+                </button>
+              </form>
+            )}
+
+            {/* Right: Desktop Buttons */}
+            <div className="hidden md:flex items-center gap-4">
+              <Link
+                href="/affixes"
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium text-sm sm:text-base"
+              >
+                前后缀清单
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowHistory(true)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors text-sm sm:text-base whitespace-nowrap"
+              >
+                历史记录
+              </button>
+            </div>
+
+            {/* Mobile: Hamburger Menu */}
+            <div className="md:hidden">
+              <button
+                type="button"
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="p-2 text-gray-700 hover:text-gray-900"
+                aria-label="菜单"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  {showMobileMenu ? (
+                    <path d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Menu Dropdown */}
+          {showMobileMenu && (
+            <div className="md:hidden border-t border-gray-200 py-2">
+              <Link
+                href="/affixes"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                onClick={() => setShowMobileMenu(false)}
+              >
+                前后缀清单
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHistory(true);
+                  setShowMobileMenu(false);
+                }}
+                className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              >
+                历史记录
+              </button>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {/* Default Page Content (no result) */}
+      {!result && (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center w-full max-w-2xl px-4">
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">
+              WorDNA 词根分析工具
+            </h1>
+            <p className="text-gray-600 text-base sm:text-lg mb-8">
+              分析其词根及扩展词汇，加深理解，加速记忆
+            </p>
+            {/* Search Box */}
+            <form onSubmit={handleSubmit} className="flex gap-2 sm:gap-3">
+              <input
+                type="text"
+                value={word}
+                onChange={(e) => setWord(e.target.value)}
+                placeholder="输入一个单词..."
+                className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base lg:text-lg"
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading || !word.trim()}
+                className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors text-xs sm:text-sm lg:text-base whitespace-nowrap flex-shrink-0"
+              >
+                {loading ? "分析中..." : "分析"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* History Modal */}
       {showHistory && (
@@ -244,7 +436,7 @@ export default function Home() {
 
       {/* Content Area - 有结果时显示 */}
       {result && (
-        <div className="pt-32 pb-12 relative">
+        <div className="pt-24 pb-12 relative">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
@@ -382,7 +574,7 @@ export default function Home() {
 
       {/* 错误信息（没有结果时） */}
       {error && !result && (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
           <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
             {error}
           </div>

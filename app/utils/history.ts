@@ -9,6 +9,8 @@ const EXPIRY_DAYS = 100;
 const EXPIRY_MS = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
 export function saveToHistory(word: string, result: any) {
+  if (typeof window === "undefined") return;
+  
   try {
     const history = getHistory();
     const newItem: HistoryItem = {
@@ -40,6 +42,8 @@ export function saveToHistory(word: string, result: any) {
 }
 
 export function getHistory(): HistoryItem[] {
+  if (typeof window === "undefined") return [];
+  
   try {
     const stored = localStorage.getItem(HISTORY_KEY);
     if (!stored) return [];
@@ -82,6 +86,8 @@ export function getCachedResult(word: string): any | null {
 }
 
 export function clearHistory() {
+  if (typeof window === "undefined") return;
+  
   try {
     localStorage.removeItem(HISTORY_KEY);
   } catch (error) {
