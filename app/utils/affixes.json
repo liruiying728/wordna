@@ -1,0 +1,43 @@
+{
+  "prefixes": [
+    "a", "ab", "abs", "ac", "ad", "af", "ag", "al", "am", "an", "ana", "ante", "anti", "ap", "apo", "ar", "as", "at", "auto",
+    "be", "bi", "by",
+    "cata", "circum", "co", "col", "com", "con", "contra", "cor", "counter",
+    "de", "deca", "deci", "di", "dia", "dif", "dis", "dys",
+    "e", "ec", "ef", "em", "en", "endo", "epi", "equi", "eu", "ex", "exo", "extra",
+    "fore", "for",
+    "hemi", "hexa", "homo", "hyper", "hypo",
+    "il", "im", "in", "infra", "inter", "intra", "intro", "ir", "iso",
+    "kilo", "macro", "mal", "mega", "meta", "micro", "mid", "milli", "mini", "mis", "mono", "multi",
+    "neo", "non",
+    "ob", "oc", "octa", "of", "om", "omni", "op", "out", "over",
+    "pan", "para", "penta", "per", "peri", "poly", "post", "pre", "pro", "proto", "pseudo",
+    "quad", "quasi",
+    "re", "retro",
+    "se", "semi", "sub", "super", "sur", "syn", "sys",
+    "tele", "tetra", "trans", "tri", "ultra", "un", "under", "uni", "up"
+  ],
+  "suffixes": [
+    "able", "ably", "ac", "ace", "acious", "acity", "acle", "acy", "ad", "ade", "age", "aholic", "al", "ality", "ally", "an", "ana", "ance", "ancy", "ane", "ant", "ar", "ard", "arian", "arium", "ary", "ate", "ated", "ation", "ative", "ator",
+    "ble", "bule",
+    "cide", "cracy", "crat", "cule", "cy",
+    "dom",
+    "ed", "ee", "eer", "el", "ella", "elle", "en", "ence", "ency", "ene", "ent", "eous", "er", "ern", "ery", "es", "ese", "esque", "ess", "est", "et", "ette", "ety",
+    "fic", "fication", "fier", "fold", "ful", "fy",
+    "gon", "gram", "graph", "graphy",
+    "hood",
+    "ia", "ial", "ian", "iana", "ible", "ic", "ical", "ically", "ice", "ician", "icity", "ics", "id", "ide", "ie", "ier", "ify", "ile", "ility", "in", "ina", "ine", "ing", "ion", "ious", "ise", "ish", "ism", "ist", "ite", "ition", "itive", "itor", "ity", "ium", "ive", "ivity", "ize", "izer",
+    "kin", "less", "let", "like", "ling", "log", "loger", "logist", "logy", "ly",
+    "ment", "meter", "metry", "most",
+    "ness", "nik",
+    "o", "oid", "ology", "oma", "on", "or", "ory", "ose", "osis", "osity", "ot", "ote", "ous", "out",
+    "phile", "phobe", "phobia", "phone", "phony", "ple", "plegia", "plegic",
+    "ry",
+    "scape", "scope", "scopy", "ship", "sion", "sis", "some", "ster",
+    "th", "tion", "tious", "tive", "tory", "tude", "ty",
+    "ual", "ular", "ule", "ulent", "ulous", "um", "ure", "uria", "us", "ute",
+    "ward", "wards", "ware", "ways", "wise",
+    "y", "yer"
+  ]
+}
+
